@@ -17,7 +17,7 @@ import (
 func main() {
 	flag.Parse()
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.Dir(".")))
+	mux.Handle("/", http.FileServer(http.Dir("assets")))
 	slog.Info("Listening on localhost:8080")
 	http.ListenAndServe("localhost:8080", mux)
 }

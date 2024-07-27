@@ -13,10 +13,10 @@ export function Viewport({totalWidth, totalHeight}) {
     const [size, setSize] = useState({width: 0, height: 0});
     const {width, height} = size;
     const canvasStyle = {
-        marginLeft: scroll.x+'px',
-        marginTop: scroll.y+'px',
-        marginRight: (totalWidth-width-scroll.x)+'px',
-        marginBottom: (totalHeight-height-scroll.y)+'px'
+        marginLeft: `${scroll.x}px`,
+        marginTop: `${scroll.y}px`,
+        marginRight: `${totalWidth - width - scroll.x}px`,
+        marginBottom: `${totalHeight - height - scroll.y}px`
     };
     const viewportRef = useRef(null);
     const canvasRef = useRef(null);
@@ -24,7 +24,7 @@ export function Viewport({totalWidth, totalHeight}) {
     useLayoutEffect(() => {
         const viewportElement = viewportRef.current;
         setSize({width: viewportElement.offsetWidth, height: viewportElement.offsetHeight});
-        const onScroll = ({target: {scrollTop, scrollLeft}}) => setScroll({x: scrollLeft, y: scrollTop});
+        const onScroll = () => setScroll({x: viewportElement.scrollLeft, y: viewportElement.scrollTop});
         viewportElement.addEventListener('scroll', onScroll);
         return () => viewportElement.removeEventListener('scroll', onScroll);
     }, []);
@@ -33,17 +33,10 @@ export function Viewport({totalWidth, totalHeight}) {
 
     useLayoutEffect(() => {
         const ctx = canvasRef.current.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, width, height);
-
+        ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = 'red';
-        ctx.fillRect(
-            rect.x - scroll.x,
-            rect.y - scroll.y,
-            rect.width,
-            rect.height,
-        );
-    }, [scroll, size])
+        ctx.fillRect(rect.x - scroll.x, rect.y - scroll.y, rect.width, rect.height);
+    }, [scroll, size]);
 
     useKeyboard(({keys, dt}) => setScroll(scroll => {
         // speed is 50% of the current viewport size per second

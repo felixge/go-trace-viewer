@@ -5,10 +5,6 @@ import htm from 'htm';
 const html = htm.bind(h);
 
 export function App() {
-    return html`<${GoroutineTimeline} />`;
-}
-
-export function GoroutineTimeline() {
     const [data, setData] = useState(null);
 
     useEffect(() => {
@@ -40,23 +36,8 @@ export function GoroutineTimeline() {
             };
             timeline.end = maxTime;
             // timeline.goroutines = timeline.goroutines.slice(0, 1000);
-            console.log(timeline);
             setData(timeline);
-            // setData(await goroutineTimeline());
         };
-        // try {
-        //     const response = await fetch('https://api.example.com/data');
-        //     if (!response.ok) {
-        //     throw new Error('Network response was not ok');
-        //     }
-        //     const result = await response.json();
-        //     setData(result);
-        // } catch (error) {
-        //     setError(error.message);
-        // } finally {
-        //     setLoading(false);
-        // }
-        // };
 
         fetchData();
     }, []);
@@ -64,7 +45,10 @@ export function GoroutineTimeline() {
         return html`<div>Loading...</div>`;
     }
 
+    return html`<${GoroutineTimeline} data=${data} />`;
+}
 
+export function GoroutineTimeline({data}) {
     const sections = Object.values(data.goroutines.reduce((acc, goroutine) => {
         const lane = {
             groups: [{
@@ -202,118 +186,6 @@ export function CanvasLane({groups, viewport}) {
     return html`<canvas ref=${canvasRef} class="lane" />`;
 }
 
-// Lane is showing things happening over time on a single thread of execution.
-export function Lane({groups, viewport}) {
-    return html`<div class="lane">${
-        groups.map((group) => html`<${FastGroup} ...${{viewport}} ...${group} />`)}
-    </div>`;
-}
-class FastGroup extends Component {
-    shouldComponentUpdate() {
-        return false;
-    }
-
-    componentWillReceiveProps(nextProps) {
-        this.renderProps(nextProps);
-    }
-
-    componentDidMount() {
-        this.renderProps(this.props);
-    }
-
-    renderProps({spans, viewport}) {
-        const start = spans[0].start;
-        const end = spans[spans.length - 1].end;
-        const renderedSpans = spans
-            // Filter out spans that are outside the viewport
-            .filter((span) => span.end >= viewport.start && span.start <= viewport.end)
-            // Compute span style
-            .map((span) => ({
-                backgroundColor: span.color,
-                left: viewport.x(span.start) - viewport.x(start),
-                width: viewport.width(span.end - span.start),
-            }))
-            // Update or insert span
-            .map((spanStyle, i) => {
-                let span = this.base.children[i];
-                if (!span) {
-                    span = document.createElement('div');
-                    span.className = 'span';
-                    this.base.appendChild(span);
-                }
-                span.style.width = spanStyle.width + 'px';
-                span.style.left = spanStyle.left + 'px';
-                span.style.backgroundColor = spanStyle.backgroundColor;
-                return true;
-            });
-    
-        // Remove extra spans from this.base
-        while (this.base.children.length > renderedSpans.length) {
-            this.base.removeChild(this.base.children[this.base.children.length - 1]);
-        }
-
-
-        this.base.style.left = viewport.x(start)+'px';
-        this.base.style.width = (viewport.x(end)-viewport.x(start))+'px';
-        
-
-        // console.log('renderProps', props);
-        // let thing = document.createElement('maybe-a-custom-element');
-        // this.base.appendChild(thing);
-    }
-
-    render() {
-        return html`<div class="group" />`;
-    }
-}
-
-// Group is a group of spans that belong together, e.g. to the same goroutine.
-export function Group({spans, viewport}) {
-    const start = spans[0].start;
-    const end = spans[spans.length - 1].end;
-    const style = {left: viewport.x(start), width: viewport.x(end)-viewport.x(start)}
-
-    const spansHTML = html`${spans
-        // Filter out spans that are outside the viewport
-        .filter((span) => span.end >= viewport.start && span.start <= viewport.end)
-        // Adjust the span positions to be relative to the group
-        .map((span) => ({
-            ...span,
-            left: viewport.x(span.start) - viewport.x(start),
-            width: viewport.width(span.end - span.start),
-        }))
-        // Render the spans
-        .map((span) => html`<${Span} ...${span} />`)
-    }`;
-
-    return html`<div class="group" style=${style}>
-        ${spansHTML}
-    </div>`;
-}
-
-// Span is a single rectangle in the timeline.
-export function Span({color, left, width, zoomHint, tooltip, onClick}) {
-    const [tooltipComponent, setTooltipComponent] = useState(undefined);
-    const style = {
-        backgroundColor: color,
-        left: left,
-        width: width,
-    }
-    const zoomIcon = zoomHint ? html`<div class="zoom-icon">🔍</div>` : null;
-    // const onMouseEnter = () => setShowTooltip(true);
-    const onMouseMove = (e) => setTooltipComponent(tooltip && tooltip({left: e.clientX+10, top: e.clientY+10}));
-    const onMouseLeave = () => setTooltipComponent(undefined);
-
-    return html`<div
-        class="span"
-        onMouseLeave=${onMouseLeave}
-        onMouseMove=${onMouseMove}
-        style="${style}">
-        ${zoomIcon}
-        ${tooltipComponent}
-    </div>`;
-}
-
 export function Tooltip({left, top, children}) {
     const style = {left: left+'px', top: top+'px'}
     return html`<div class="tooltip" style=${style}>
@@ -358,10 +230,7 @@ function stateColor(state) {
         case 'waiting': return '#dddddd';
         case 'notexist': return '#dddddd';
         case 'syscall': return '#fdffb6';
-        default: {
-            throw state;
-            return 'red';
-        }
+        default: throw state; // TODO: better handling?
     }
 }
 
@@ -378,19 +247,6 @@ function useRefWidth(ref) {
 
     return size;
 }
-
-    // // Check for zoom to change
-    // let lastPixelRatio = 0;
-    // const checkZoom = () => {
-    //     const currentPixelRatio = window.devicePixelRatio;
-    //     if (currentPixelRatio !== lastPixelRatio) {
-    //         lastPixelRatio = currentPixelRatio;
-    //         viewport.width = groupsDiv.offsetWidth-1;
-    //         render();
-    //     }
-    //     requestAnimationFrame(checkZoom);
-    // }
-    // checkZoom();
 
 const useAnimationFrame = callback => {
   const requestRef = useRef();

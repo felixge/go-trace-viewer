@@ -51,13 +51,11 @@ export function App() {
 export function GoroutineTimeline({data}) {
     const sections = Object.values(data.goroutines.reduce((acc, goroutine) => {
         const lane = {
-            groups: [{
-                spans: goroutine.events.map((event) => ({
-                    start: event.start,
-                    end: event.end,
-                    color: stateColor(event.state),
-                })),
-            }]
+            spans: goroutine.events.map((event) => ({
+                start: event.start,
+                end: event.end,
+                color: stateColor(event.state),
+            })),
         }
 
         if (acc[goroutine.name]) {
@@ -151,7 +149,7 @@ export function Section({name, lanes, viewport}) {
 }
 
 
-export function CanvasLane({groups, viewport}) {
+export function CanvasLane({spans, viewport}) {
     const canvasRef = useRef(null);
     useLayoutEffect(() => {
         const {width, height} = canvasRef.current.getBoundingClientRect();
@@ -165,24 +163,22 @@ export function CanvasLane({groups, viewport}) {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, width, height);
         const mainColor = stateColor('running');
-        const firstSpan = groups[0].spans[0];
-        const lastSpan = groups[groups.length-1].spans[groups[groups.length-1].spans.length-1];
+        const firstSpan = spans[0];
+        const lastSpan = spans[spans.length-1];
         const [x, y, w, h] = [viewport.x(firstSpan.start), 0, viewport.width(lastSpan.end-firstSpan.start), height];
         ctx.fillStyle = mainColor;
         ctx.fillRect(x, y, w, h);
 
         let count = 0;
-        groups.forEach(({spans}) => {
-            spans
-                .filter((span) => span.end >= viewport.start && span.start <= viewport.end && span.color !== mainColor)
-                .forEach((span) => {
-                    ctx.fillStyle = span.color;
-                    const [x, y, w, h] = [viewport.x(span.start), 0, viewport.width(span.end-span.start), height];
-                    ctx.fillRect(x, y, w, h);
-                    count++;
-                });
-        });
-    }, [groups, viewport]);
+        spans
+            .filter((span) => span.end >= viewport.start && span.start <= viewport.end && span.color !== mainColor)
+            .forEach((span) => {
+                ctx.fillStyle = span.color;
+                const [x, y, w, h] = [viewport.x(span.start), 0, viewport.width(span.end-span.start), height];
+                ctx.fillRect(x, y, w, h);
+                count++;
+            });
+    }, [spans, viewport]);
     return html`<canvas ref=${canvasRef} class="lane" />`;
 }
 

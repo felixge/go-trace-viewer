@@ -9,8 +9,63 @@ export function App() {
 }
 
 export function GoroutineTimeline() {
-    const gt = goroutineTimeline();
-    const sections = Object.values(gt.goroutines.reduce((acc, goroutine) => {
+    const [data, setData] = useState(null);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            let res, json;
+            try {
+                res = await fetch('/goroutines.json');
+                json = await res.json();
+            } catch (e) {
+                throw('TODO: handle: '+e);
+            }
+            let maxTime = 0;
+            const timeline = {
+                start: 0,
+                end: 0,
+                goroutines: Object
+                    .entries(json.goroutines)
+                    .map(([goID, {name: nameSID, events}]) => ({
+                        id: goID,
+                        name: json.strings[nameSID],
+                        events: events.slice(0, events.length-1).map((event, i) => {
+                            const [start, stateSID] = event;
+                            const [end] = events[i+1];
+                            const state = json.strings[stateSID];
+                            maxTime = Math.max(maxTime, end);
+                            return {start, end, state}
+                        }),
+                    })),
+            };
+            timeline.end = maxTime;
+            // timeline.goroutines = timeline.goroutines.slice(0, 1000);
+            console.log(timeline);
+            setData(timeline);
+            // setData(await goroutineTimeline());
+        };
+        // try {
+        //     const response = await fetch('https://api.example.com/data');
+        //     if (!response.ok) {
+        //     throw new Error('Network response was not ok');
+        //     }
+        //     const result = await response.json();
+        //     setData(result);
+        // } catch (error) {
+        //     setError(error.message);
+        // } finally {
+        //     setLoading(false);
+        // }
+        // };
+
+        fetchData();
+    }, []);
+    if (data === null) {
+        return html`<div>Loading...</div>`;
+    }
+
+
+    const sections = Object.values(data.goroutines.reduce((acc, goroutine) => {
         const lane = {
             groups: [{
                 spans: goroutine.events.map((event) => ({
@@ -31,18 +86,25 @@ export function GoroutineTimeline() {
 
 
     const timeline = {
-        start: gt.start,
-        end: gt.end,
+        start: data.start,
+        end: data.end,
         sections: sections,
     };
     return html`<${Timeline} ...${timeline}}/>`;
 }
 
-export function Timeline({sections}) {
+export function Timeline({start, end, sections}) {
     const timelineRef = useRef(null);
     const timelineWidth = useRefWidth(timelineRef);
-    const defaultViewport = {start: 0, end: 1000};
+    const defaultViewport = {start, end};
     const [viewport, setViewport] = useState(defaultViewport);
+    const [scroll, setScroll] = useState(0);
+
+    useEffect(() => {
+        const onScroll = () => setViewport(vp => ({...vp, scrollY: window.scrollY}));
+        window.addEventListener('scroll', onScroll);
+        return () => window.removeEventListener('scroll', onScroll);
+    }, [])
 
     useKeyboard(({keys, dt}) => setViewport(vp => {
         // speed is 50% of the current viewport size per second
@@ -76,7 +138,7 @@ export function Timeline({sections}) {
     return html`<div ref=${timelineRef} class="timeline">
         <${TimeAxis} ...${{viewport}} />
         ${timelineWidth > 0 && sections.map(
-            (section) => html`<${Section} ...${{viewport}} ...${section} />`
+            (section) => html`<${Section} ...${{viewport}} ...${section} ...${{scroll}} />`
         )}
     </div>`;
 }
@@ -109,6 +171,10 @@ export function CanvasLane({groups, viewport}) {
     const canvasRef = useRef(null);
     useLayoutEffect(() => {
         const {width, height} = canvasRef.current.getBoundingClientRect();
+        if (!isElementInViewport(canvasRef.current)) {
+            return;
+        }
+
         canvasRef.current.width = width;
         canvasRef.current.height = height;
         const ctx = canvasRef.current.getContext('2d');
@@ -288,10 +354,14 @@ function useKeyboard(onKeysPressed) {
 function stateColor(state) {
     switch (state) {
         case 'running': return '#a0c4ff';
-        case 'unscheduled': return '#ffadad';
+        case 'runnable': return '#ffadad';
         case 'waiting': return '#dddddd';
+        case 'notexist': return '#dddddd';
         case 'syscall': return '#fdffb6';
-        default: return 'red';
+        default: {
+            throw state;
+            return 'red';
+        }
     }
 }
 
@@ -383,4 +453,14 @@ function generateTimeTicks(minTime, maxTime, targetTickCount) {
     min: niceMin / 1000000, // Convert back to milliseconds
     max: niceMax / 1000000 // Convert back to milliseconds
   };
+}
+
+function isElementInViewport(el) {
+  const rect = el.getBoundingClientRect();
+  return (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+  );
 }

@@ -3,7 +3,7 @@ import { h } from 'preact';
 import htm from 'htm';
 const html = htm.bind(h);
 
-export function goroutineTimeline() {
+export async function goroutineTimeline() {
     const random = seededRandom(1234);
 
     const timeline = {

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/trace"
@@ -18,6 +19,7 @@ func main() {
 	flag.Parse()
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir("assets")))
+	mux.Handle("/goroutines.json", goroutineHandler(flag.Arg(0)))
 	slog.Info("Listening on localhost:8080")
 	http.ListenAndServe("localhost:8080", mux)
 }
@@ -30,7 +32,7 @@ func goroutineHandler(tracePath string) http.HandlerFunc {
 	go func() {
 		start := time.Now()
 		var err error
-		res.Goroutines, err = goroutineGroups(tracePath)
+		res, err = goroutineTimeline(tracePath)
 		if err != nil {
 			res.Error = err.Error()
 			slog.Error("failed to parse trace", "err", err.Error())
@@ -41,46 +43,59 @@ func goroutineHandler(tracePath string) http.HandlerFunc {
 	}()
 	return func(w http.ResponseWriter, r *http.Request) {
 		<-done
-		out, _ := json.MarshalIndent(res, "", "  ")
+		out, _ := json.Marshal(res)
 		w.Write(out)
 	}
 }
 
+type stringID int
+
 type GoroutineTimeline struct {
-	Goroutines []*Goroutine `json:"goroutines"`
-	Error      string       `json:"error"`
+	Goroutines map[int]*Goroutine `json:"goroutines"`
+	Strings    []string           `json:"strings"`
+	Error      string             `json:"error"`
+
+	strings map[string]stringID
 }
 
 type Goroutine struct {
-	ID     int      `json:"id"`
-	Name   string   `json:"name"`
-	Events []*Event `json:"events"`
+	Name   float64     `json:"name"`
+	Events [][]float64 `json:"events"`
 }
 
-type Event struct {
-	Start int    `json:"start"`
-	End   int    `json:"end"`
-	State string `json:"state"`
+func (g *GoroutineTimeline) StringID(s string) stringID {
+	if g.strings == nil {
+		g.strings = make(map[string]stringID)
+	}
+	if id, ok := g.strings[s]; ok {
+		return id
+	}
+	id := stringID(len(g.Strings))
+	g.Strings = append(g.Strings, s)
+	g.strings[s] = id
+	return id
 }
 
-func goroutineGroups(path string) ([]*Goroutine, error) {
+func goroutineTimeline(path string) (*GoroutineTimeline, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	// Start reading from STDIN.
 	r, err := trace.NewReader(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	type transition struct {
-		from string
-		to   string
+	tl := &GoroutineTimeline{
+		Goroutines: make(map[int]*Goroutine),
 	}
-	m := map[transition]int{}
+	tl.StringID("")
+	var (
+		prevTime trace.Time
+		minTime  trace.Time = -1
+	)
 	for {
 		// Read the event.
 		ev, err := r.ReadEvent()
@@ -91,28 +106,72 @@ func goroutineGroups(path string) ([]*Goroutine, error) {
 		}
 
 		// Process it.
-		if ev.Kind() == trace.EventStateTransition {
+		switch ev.Kind() {
+		case trace.EventStateTransition:
+			// Check that events are in order.
+			if ev.Time() < prevTime {
+				return nil, fmt.Errorf("events not in order: %v < %v", ev.Time(), prevTime)
+			}
+			// Update the minimum time.
+			if minTime == -1 {
+				minTime = ev.Time()
+			}
+
 			st := ev.StateTransition()
-			if st.Resource.Kind == trace.ResourceGoroutine {
-				from, to := st.Goroutine()
-				t := transition{from.String(), to.String()}
+			switch {
+			case st.Resource.Kind == trace.ResourceGoroutine:
+				goID := st.Resource.Goroutine()
+				g, ok := tl.Goroutines[int(goID)]
+				if !ok {
+					g = &Goroutine{}
+					tl.Goroutines[int(goID)] = g
+				}
+				_, to := st.Goroutine()
+				timestamp := float64(ev.Time()-minTime) / 1e6
+				stateSID := float64(tl.StringID(strings.ToLower(to.String())))
+				event := []float64{timestamp, stateSID}
+				g.Events = append(g.Events, event)
 
-				// fmt.Printf("ev.Time(): %v\n", ev.Time())
+				if g.Name == 0 {
+					var last trace.StackFrame
+					st.Stack.Frames(func(f trace.StackFrame) bool {
+						last = f
+						return true
+					})
+					g.Name = float64(tl.StringID(last.Func))
+				}
+				if g.Name == 0 {
+					var last trace.StackFrame
+					ev.Stack().Frames(func(f trace.StackFrame) bool {
+						last = f
+						return true
+					})
+					g.Name = float64(tl.StringID(last.Func))
+				}
+			}
+			prevTime = ev.Time()
 
-				m[t]++
-				// fmt.Printf("from: %v\n", from)
-				// fmt.Printf("to: %v\n", to)
-				// Look for goroutines blocking, and count them.
-				// if from.Executing() && to == trace.GoWaiting {
-				// 	blocked++
-				// 	if strings.Contains(st.Reason, "network") {
-				// 		blockedOnNetwork++
-				// 	}
-				// }
+		case trace.EventStackSample:
+			goID := ev.Goroutine()
+			if goID == trace.NoGoroutine {
+				continue
+			}
+			g, ok := tl.Goroutines[int(goID)]
+			if !ok {
+				g = &Goroutine{}
+				tl.Goroutines[int(goID)] = g
+			}
+			if g.Name == 0 {
+				fmt.Printf("g.Name: %v\n", g.Name)
+				var last trace.StackFrame
+				ev.Stack().Frames(func(f trace.StackFrame) bool {
+					last = f
+					return true
+				})
+				g.Name = float64(tl.StringID(last.Func))
 			}
 		}
 	}
-	fmt.Printf("m: %v\n", m)
 
-	return nil, nil
+	return tl, nil
 }

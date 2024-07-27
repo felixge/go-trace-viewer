@@ -5,6 +5,68 @@ import htm from 'htm';
 const html = htm.bind(h);
 
 export function App() {
+    return html`<${Viewport} totalWidth=${10000} totalHeight=${10000} />`;
+}
+
+export function Viewport({totalWidth, totalHeight}) {
+    const [scroll, setScroll] = useState({x: 0, y: 0});
+    const [size, setSize] = useState({width: 0, height: 0});
+    const {width, height} = size;
+    const canvasStyle = {
+        marginLeft: scroll.x+'px',
+        marginTop: scroll.y+'px',
+        marginRight: (totalWidth-width-scroll.x)+'px',
+        marginBottom: (totalHeight-height-scroll.y)+'px'
+    };
+    const viewportRef = useRef(null);
+    const canvasRef = useRef(null);
+
+    useLayoutEffect(() => {
+        const viewportElement = viewportRef.current;
+        setSize({width: viewportElement.offsetWidth, height: viewportElement.offsetHeight});
+        const onScroll = ({target: {scrollTop, scrollLeft}}) => setScroll({x: scrollLeft, y: scrollTop});
+        viewportElement.addEventListener('scroll', onScroll);
+        return () => viewportElement.removeEventListener('scroll', onScroll);
+    }, []);
+
+    const rect = {x: 100, y: 50, width: 100, height: 150};
+
+    useLayoutEffect(() => {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.fillStyle = 'red';
+        ctx.fillRect(
+            rect.x - scroll.x,
+            rect.y - scroll.y,
+            rect.width,
+            rect.height,
+        );
+    }, [scroll, size])
+
+    useKeyboard(({keys, dt}) => setScroll(scroll => {
+        // speed is 50% of the current viewport size per second
+        const speed = (width * 0.5) * dt / 1000;
+        scroll = {...scroll};
+        if (keys.has('a')) {
+            scroll.x -= speed;
+        }
+        if (keys.has('d')) {
+            scroll.x += speed;
+        }
+        scroll.x = Math.max(0, Math.min(scroll.x, totalWidth-width));
+        scroll.y = Math.max(0, Math.min(scroll.y, totalHeight-height));
+
+        return scroll;
+    }), [size]);
+
+    return html`<div ref=${viewportRef} scrollLeft=${scroll.x} class="viewport">
+        <canvas width=${width} height=${height} ref=${canvasRef} style=${canvasStyle} />
+    </div>`;
+}
+
+export function OldApp() {
     const [data, setData] = useState(null);
 
     useEffect(() => {
@@ -191,7 +253,7 @@ export function Tooltip({left, top, children}) {
 
 // useKeyboard is a hook that calls onKeysPressed with the set of keys that are
 // currently pressed every frame.
-function useKeyboard(onKeysPressed) {
+function useKeyboard(onKeysPressed, deps) {
     useLayoutEffect(() => {
         let keys = new Set();
         const onKeydown = (e) => keys.add(e.key);
@@ -216,7 +278,7 @@ function useKeyboard(onKeysPressed) {
             window.removeEventListener('keyup', onKeyup);
             window.cancelAnimationFrame(frameID);
         };
-    }, []);
+    }, deps);
 }
 
 function stateColor(state) {

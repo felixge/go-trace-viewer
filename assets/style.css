@@ -3,6 +3,14 @@ body{
     position: relative;
 }
 
+.viewport{
+    overflow: auto;
+    border: 1px solid black;
+    width: 400px;
+    height: 300px;
+}
+
+
 .timeline{
     padding: 1em 0 0 0;
 }

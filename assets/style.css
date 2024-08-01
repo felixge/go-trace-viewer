@@ -1,13 +1,33 @@
-body{
-    margin: 10px;
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+.bar {
+    height: 23px;
     position: relative;
+    border-bottom: 1px solid black;
+}
+
+.bar label > * {
+    margin-left: 5px;
+}
+
+.bar label:not(:first-child) {
+    margin-left: 5px;
+}
+
+.bar input[type="checkbox"] {
+    position: relative;
+    right: 2px;
+    top: 2px;
 }
 
 .viewport{
+    width: 100vw;
+    height: calc(100vh - 24px);
     overflow: auto;
-    border: 1px solid black;
-    width: 400px;
-    height: 300px;
 }
 
 

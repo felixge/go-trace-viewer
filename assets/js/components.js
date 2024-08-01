@@ -49,7 +49,7 @@ export function App() {
                 }
 
                 timeline.groups.slice(laneRange[0], laneRange[1])
-                    .forEach((goID, relI) => {
+                    .forEach(({goroutines: [goID]}, relI) => {
                         if (!(goID in batch.goroutines)) {
                             return;
                         }
@@ -113,6 +113,9 @@ export function App() {
     const [compact, setCompact] = useState(false);
     const handleCompactChange = (e) => setCompact(e.target.checked);
 
+    const [bucket, setBucket] = useState(true);
+    const handleBucketChange = (e) => setBucket(e.target.checked);
+
     return html`<div class="container">
         <div class="bar">
             <${Select} label="Sort by" value=${sortBy} options=${[
@@ -125,6 +128,7 @@ export function App() {
                 {value: "id", label: "Goroutine ID"},
             ]} onChange=${handleGroupByChange} />
             <${Checkbox} label="Compact" checked=${compact} onChange=${handleCompactChange} />
+            <${Checkbox} label="Bucket" checked=${bucket} onChange=${handleBucketChange} />
         </div>
         <${Viewport} draw=${draw} totalSize=${totalSize} />
     </div>`;
@@ -151,9 +155,6 @@ const Select = ({ label, value, options, onChange }) => {
     </label>
   `;
 };
-
-function laneForEach(fn) {
-}
 
 function overlap(start1, end1, start2, end2) {
     return start1 <= end2 && end1 >= start2;
@@ -200,7 +201,10 @@ function timelineAddBatch(timeline, batch) {
         .forEach(([goID, goroutine]) => {
             if (!timeline.goroutines[goID]) {
                 timeline.goroutines[goID] = {};
-                timeline.groups.push(goID);
+                timeline.groups.push({
+                    name: batch.strings[goroutine.name],
+                    goroutines: [goID]
+                });
             }
         });
 

@@ -107,30 +107,7 @@ export function App() {
 
     const [sortBy, setSortBy] = useState('start');
     const handleSortByChange = (e) => setSortBy(e.target.value);
-
-    switch (sortBy) {
-        case 'start':
-            timeline.groups.sort((a, b) => {
-                const aStart = Math.min(...a.goroutines.map(goID => timeline.goroutines[goID].start));
-                const bStart = Math.min(...b.goroutines.map(goID => timeline.goroutines[goID].start));
-                return aStart - bStart;
-            });
-            break;
-        case 'running':
-            timeline.groups.sort((a, b) => {
-                const aRunning = a.goroutines.reduce((sum, goID) => sum + timeline.goroutines[goID].running, 0);
-                const bRunning = b.goroutines.reduce((sum, goID) => sum + timeline.goroutines[goID].running, 0);
-                return bRunning - aRunning;
-            });
-            break;
-        case 'duration':
-            timeline.groups.sort((a, b) => {
-                const aDuration = Math.max(...a.goroutines.map(goID => (timeline.goroutines[goID].end - timeline.goroutines[goID].start)));
-                const bDuration = Math.max(...b.goroutines.map(goID => (timeline.goroutines[goID].end - timeline.goroutines[goID].start)));
-                return bDuration - aDuration;
-            });
-            break;
-    }
+    sortTimeline(sortBy, timeline);
 
     const [groupBy, setGroupBy] = useState('name');
     const handleGroupByChange = (e) => setGroupBy(e.target.value);
@@ -180,6 +157,32 @@ const Select = ({ label, value, options, onChange }) => {
     </label>
   `;
 };
+
+function sortTimeline(sortBy, timeline) {
+    switch (sortBy) {
+        case 'start':
+            timeline.groups.sort((a, b) => {
+                const aStart = Math.min(...a.goroutines.map(goID => timeline.goroutines[goID].start));
+                const bStart = Math.min(...b.goroutines.map(goID => timeline.goroutines[goID].start));
+                return aStart - bStart;
+            });
+            break;
+        case 'running':
+            timeline.groups.sort((a, b) => {
+                const aRunning = a.goroutines.reduce((sum, goID) => sum + timeline.goroutines[goID].running, 0);
+                const bRunning = b.goroutines.reduce((sum, goID) => sum + timeline.goroutines[goID].running, 0);
+                return bRunning - aRunning;
+            });
+            break;
+        case 'duration':
+            timeline.groups.sort((a, b) => {
+                const aDuration = Math.max(...a.goroutines.map(goID => (timeline.goroutines[goID].end - timeline.goroutines[goID].start)));
+                const bDuration = Math.max(...b.goroutines.map(goID => (timeline.goroutines[goID].end - timeline.goroutines[goID].start)));
+                return bDuration - aDuration;
+            });
+            break;
+    }
+}
 
 function overlap(start1, end1, start2, end2) {
     return start1 <= end2 && end1 >= start2;

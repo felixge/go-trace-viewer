@@ -1,6 +1,7 @@
 - [x] feat: sorting
+- [ ] bug: net-http trace jumps around while navigating it with keyboard
+- [ ] feat: start left
 - [ ] feat: grouping
 - [ ] feat: compacting
 - [ ] feat: bucketing
 - [ ] perf: re-enable delta encoding
-- [ ] bug: net-http trace jumps around while navigating it with keyboard

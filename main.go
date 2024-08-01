@@ -199,14 +199,18 @@ func (b *BatchReader) readLoop() {
 				goID := st.Resource.Goroutine()
 				g, ok := batch.Goroutines[int(goID)]
 				if !ok {
-					g = &Goroutine{}
+					g = &Goroutine{prevTime: ev.Time()}
 					batch.Goroutines[int(goID)] = g
 				}
-				_, to := st.Goroutine()
+				from, to := st.Goroutine()
 				timestamp := float64(deltaEncode(ev.Time()))
 				stateSID := float64(batch.StringID(strings.ToLower(to.String())))
 				event := []float64{timestamp, stateSID}
 				g.Events = append(g.Events, event)
+
+				if from == trace.GoRunning {
+					g.Running += float64(ev.Time() - g.prevTime)
+				}
 
 				if g.Name == 0 {
 					var last trace.StackFrame
@@ -224,6 +228,7 @@ func (b *BatchReader) readLoop() {
 					})
 					g.Name = float64(batch.StringID(last.Func))
 				}
+				g.prevTime = ev.Time()
 			}
 
 			// case trace.EventStackSample:
@@ -326,8 +331,11 @@ type Batch struct {
 
 type stringID int
 type Goroutine struct {
-	Name   float64     `json:"name"`
-	Events [][]float64 `json:"events"`
+	Name    float64     `json:"name"`
+	Running float64     `json:"running"`
+	Events  [][]float64 `json:"events"`
+
+	prevTime trace.Time
 }
 
 func (g *Batch) StringID(s string) stringID {

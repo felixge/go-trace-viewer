@@ -65,6 +65,7 @@ export function App() {
                                 return;
                             }
 
+                            // TODO: renable delta encoding
                             // startTs += event[0];
                             // const endTs = startTs + events[ei+1][0];
                             const startTs = event[0];
@@ -106,6 +107,30 @@ export function App() {
 
     const [sortBy, setSortBy] = useState('start');
     const handleSortByChange = (e) => setSortBy(e.target.value);
+
+    switch (sortBy) {
+        case 'start':
+            timeline.groups.sort((a, b) => {
+                const aStart = Math.min(...a.goroutines.map(goID => timeline.goroutines[goID].start));
+                const bStart = Math.min(...b.goroutines.map(goID => timeline.goroutines[goID].start));
+                return aStart - bStart;
+            });
+            break;
+        case 'running':
+            timeline.groups.sort((a, b) => {
+                const aRunning = a.goroutines.reduce((sum, goID) => sum + timeline.goroutines[goID].running, 0);
+                const bRunning = b.goroutines.reduce((sum, goID) => sum + timeline.goroutines[goID].running, 0);
+                return bRunning - aRunning;
+            });
+            break;
+        case 'duration':
+            timeline.groups.sort((a, b) => {
+                const aDuration = Math.max(...a.goroutines.map(goID => (timeline.goroutines[goID].end - timeline.goroutines[goID].start)));
+                const bDuration = Math.max(...b.goroutines.map(goID => (timeline.goroutines[goID].end - timeline.goroutines[goID].start)));
+                return bDuration - aDuration;
+            });
+            break;
+    }
 
     const [groupBy, setGroupBy] = useState('name');
     const handleGroupByChange = (e) => setGroupBy(e.target.value);
@@ -199,13 +224,22 @@ function timelineAddBatch(timeline, batch) {
 
     Object.entries(batch.goroutines)
         .forEach(([goID, goroutine]) => {
-            if (!timeline.goroutines[goID]) {
-                timeline.goroutines[goID] = {};
+            let g = timeline.goroutines[goID];
+            if (!g) {
+                g = {
+                    start: Infinity,
+                    end: 0,
+                    running: 0,
+                }
+                timeline.goroutines[goID] = g;
                 timeline.groups.push({
                     name: batch.strings[goroutine.name],
                     goroutines: [goID]
                 });
             }
+            g.running += goroutine.running;
+            g.start = Math.min(g.start, goroutine.events[0][0]);
+            g.end = Math.max(g.end, goroutine.events[goroutine.events.length-1][0]);
         });
 
     return newTimeline;
@@ -539,7 +573,7 @@ const useAnimationFrame = callback => {
   
   const animate = time => {
     if (previousTimeRef.current != undefined) {
-      const deltaTime = time - previousTimeRef.current;
+      const Time = time - previousTimeRef.current;
       callback(deltaTime)
     }
     previousTimeRef.current = time;
